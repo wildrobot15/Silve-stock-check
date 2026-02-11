@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Threat Hunt IOC Updater</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Threat Hunt IOC Updater (CrowdStrike)</h1>
+      <p>
+        Pulls recent security headlines and refreshes IOC candidates every 3 days when you click
+        <strong>Check for Updates</strong>.
+      </p>
+    </header>
+
+    <section class="card controls">
+      <button id="checkBtn">Check for Updates</button>
+      <button id="forceBtn" class="secondary">Force Update Now</button>
+      <div id="status" class="status">Ready.</div>
+      <div class="meta-grid">
+        <div><span class="label">Last Update:</span> <span id="lastUpdate">Never</span></div>
+        <div><span class="label">Next Due:</span> <span id="nextDue">Now</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Recent News (Last 3 Days)</h2>
+      <p class="muted">Top stories from selected security news sources.</p>
+      <div id="newsList" class="list"></div>
+    </section>
+
+    <section class="card">
+      <h2>Deduplicated Threat Buckets</h2>
+      <p class="muted">Repeated stories are grouped into one huntable technique.</p>
+      <div id="bucketList" class="list"></div>
+    </section>
+
+    <section class="card">
+      <h2>New IOCs (from live open feeds)</h2>
+      <p class="muted">IOC set is refreshed every 72 hours, then cached locally.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>IOC</th>
+            <th>Source</th>
+            <th>Relevance</th>
+          </tr>
+        </thead>
+        <tbody id="iocTableBody"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
