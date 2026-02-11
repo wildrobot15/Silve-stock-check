@@ -1,12 +1,10 @@
 const SYMBOL = "SILVERBEES.NS";
 const TV_SYMBOL = "NSE:SILVERBEES";
-const BASE_URL = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?interval=1d&range=3mo`;
+const DAILY_URL = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?interval=1d&range=3mo`;
+const INTRADAY_URL = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?interval=5m&range=1d`;
 
 const FALLBACK_SITES = [
-  {
-    name: "TradingView",
-    url: `https://www.tradingview.com/symbols/${TV_SYMBOL.replace(":", "-")}/`,
-  },
+  { name: "TradingView", url: `https://www.tradingview.com/symbols/${TV_SYMBOL.replace(":", "-")}/` },
   { name: "Finviz", url: "https://finviz.com/" },
   { name: "Barchart", url: "https://www.barchart.com/" },
   { name: "Yahoo Finance", url: `https://finance.yahoo.com/quote/${SYMBOL}` },
@@ -15,83 +13,6 @@ const FALLBACK_SITES = [
   { name: "Investing.com", url: "https://www.investing.com/" },
   { name: "Tickertape", url: "https://www.tickertape.in/" },
   { name: "Research 360", url: "https://research360.in/" },
-];
-
-const DATA_ENDPOINTS = [
-  {
-    name: "Yahoo Finance",
-    request: {
-      url: BASE_URL,
-      options: {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      },
-    },
-    parser: (data) => {
-      const result = data?.chart?.result?.[0];
-      const quote = result?.indicators?.quote?.[0];
-      if (!result || !quote) {
-        throw new Error("Unexpected response format from Yahoo Finance");
-      }
-      return { type: "candles", quote };
-    },
-  },
-  {
-    name: "Yahoo via AllOrigins proxy",
-    request: {
-      url: `https://api.allorigins.win/raw?url=${encodeURIComponent(BASE_URL)}`,
-      options: {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      },
-    },
-    parser: (data) => {
-      const result = data?.chart?.result?.[0];
-      const quote = result?.indicators?.quote?.[0];
-      if (!result || !quote) {
-        throw new Error("Unexpected response format from proxy provider");
-      }
-      return { type: "candles", quote };
-    },
-  },
-  {
-    name: "TradingView India Scanner",
-    request: {
-      url: "https://scanner.tradingview.com/india/scan",
-      options: {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          symbols: {
-            tickers: [TV_SYMBOL],
-            query: { types: [] },
-          },
-          columns: ["open", "high", "low", "close", "Recommend.All"],
-        }),
-      },
-    },
-    parser: (data) => {
-      const row = data?.data?.[0];
-      const values = row?.d;
-      if (!row || !Array.isArray(values) || values.length < 5) {
-        throw new Error("Unexpected response format from TradingView");
-      }
-
-      const [open, high, low, close, recommendAll] = values;
-      if ([open, high, low, close].some((value) => typeof value !== "number")) {
-        throw new Error("TradingView returned incomplete OHLC values");
-      }
-
-      return {
-        type: "snapshot",
-        candle: { open, high, low, close },
-        recommendAll: typeof recommendAll === "number" ? recommendAll : 0,
-      };
-    },
-  },
 ];
 
 const startBtn = document.getElementById("startBtn");
@@ -105,6 +26,9 @@ const buySignalEl = document.getElementById("buySignal");
 const sellSignalEl = document.getElementById("sellSignal");
 const bestBuyPriceEl = document.getElementById("bestBuyPrice");
 const bestSellPriceEl = document.getElementById("bestSellPrice");
+const intradayBestBuyPriceEl = document.getElementById("intradayBestBuyPrice");
+const intradayBestSellPriceEl = document.getElementById("intradayBestSellPrice");
+const intradaySignalEl = document.getElementById("intradaySignal");
 const reasonEl = document.getElementById("reason");
 
 function formatPrice(value) {
@@ -133,7 +57,7 @@ function average(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function analyzeCandles(candles) {
+function analyzeDailyCandles(candles) {
   const latest = candles[candles.length - 1];
   const previous = candles[candles.length - 2];
   const closes = candles.map((candle) => candle.close);
@@ -167,10 +91,10 @@ function analyzeCandles(candles) {
   const reasons = [];
 
   if (shortMA > longMA) {
-    reasons.push("Short-term trend is above long-term trend (bullish momentum)");
+    reasons.push("Daily trend is bullish (5MA above 20MA)");
     buy = "YES";
   } else {
-    reasons.push("Short-term trend is below long-term trend (weak momentum)");
+    reasons.push("Daily trend is weak (5MA below 20MA)");
     sell = "YES";
   }
 
@@ -187,7 +111,7 @@ function analyzeCandles(candles) {
   }
 
   if (isDoji) {
-    reasons.push("Doji candle detected: market indecision, act cautiously");
+    reasons.push("Doji candle detected, market indecision");
     buy = "NO";
     sell = "NO";
   }
@@ -200,6 +124,26 @@ function analyzeCandles(candles) {
     liveBestSellPrice,
     reasons: reasons.join(". "),
   };
+}
+
+function analyzeIntradayCandles(candles) {
+  const latest = candles[candles.length - 1];
+  const recent = candles.slice(-15);
+  const closes = candles.map((candle) => candle.close);
+  const shortMA = average(closes.slice(-5));
+  const longMA = average(closes.slice(-12));
+
+  const liveBestBuyPrice = Math.min(...recent.map((candle) => candle.low));
+  const liveBestSellPrice = Math.max(...recent.map((candle) => candle.high));
+
+  let signal = "HOLD";
+  if (latest.close > shortMA && shortMA > longMA) {
+    signal = "INTRADAY BUY ZONE";
+  } else if (latest.close < shortMA && shortMA < longMA) {
+    signal = "INTRADAY SELL ZONE";
+  }
+
+  return { liveBestBuyPrice, liveBestSellPrice, signal };
 }
 
 function analyzeTradingViewSnapshot(candle, recommendAll) {
@@ -221,7 +165,78 @@ function analyzeTradingViewSnapshot(candle, recommendAll) {
     liveBestBuyPrice,
     liveBestSellPrice,
     reasons:
-      "Yahoo candle history unavailable. Used TradingView live snapshot and TradingView recommendation score for signal.",
+      "Yahoo daily candle history unavailable. Used TradingView live snapshot and recommendation score.",
+  };
+}
+
+async function fetchJson(url, options = { method: "GET", headers: { Accept: "application/json" } }) {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function fetchYahooQuoteData(url) {
+  const errors = [];
+
+  try {
+    const data = await fetchJson(url);
+    const quote = data?.chart?.result?.[0]?.indicators?.quote?.[0];
+    if (!quote) {
+      throw new Error("Unexpected Yahoo response format");
+    }
+    return { quote, source: "Yahoo Finance" };
+  } catch (error) {
+    errors.push(`Yahoo Finance: ${error.message}`);
+  }
+
+  try {
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const data = await fetchJson(proxyUrl);
+    const quote = data?.chart?.result?.[0]?.indicators?.quote?.[0];
+    if (!quote) {
+      throw new Error("Unexpected Yahoo proxy response format");
+    }
+    return { quote, source: "Yahoo via AllOrigins proxy" };
+  } catch (error) {
+    errors.push(`Yahoo via AllOrigins proxy: ${error.message}`);
+  }
+
+  throw new Error(errors.join(" | "));
+}
+
+async function fetchTradingViewSnapshot() {
+  const data = await fetchJson("https://scanner.tradingview.com/india/scan", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      symbols: {
+        tickers: [TV_SYMBOL],
+        query: { types: [] },
+      },
+      columns: ["open", "high", "low", "close", "Recommend.All"],
+    }),
+  });
+
+  const row = data?.data?.[0];
+  const values = row?.d;
+  if (!row || !Array.isArray(values) || values.length < 5) {
+    throw new Error("Unexpected TradingView response format");
+  }
+
+  const [open, high, low, close, recommendAll] = values;
+  if ([open, high, low, close].some((value) => typeof value !== "number")) {
+    throw new Error("TradingView returned incomplete OHLC values");
+  }
+
+  return {
+    candle: { open, high, low, close },
+    recommendAll: typeof recommendAll === "number" ? recommendAll : 0,
+    source: "TradingView India Scanner",
   };
 }
 
@@ -247,88 +262,104 @@ async function checkAlternativeSites() {
   return checks.join(" | ");
 }
 
-async function fetchMarketData() {
-  const errors = [];
-
-  for (const endpoint of DATA_ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint.request.url, endpoint.request.options);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const parsed = endpoint.parser(data);
-      return {
-        ...parsed,
-        source: endpoint.name,
-      };
-    } catch (error) {
-      errors.push(`${endpoint.name}: ${error.message}`);
-    }
-  }
-
-  const siteChecks = await checkAlternativeSites();
-  throw new Error(`${errors.join(" | ")} | Alternative site check: ${siteChecks}`);
-}
-
 function clearSignals() {
   buySignalEl.textContent = "-";
   sellSignalEl.textContent = "-";
   bestBuyPriceEl.textContent = "-";
   bestSellPriceEl.textContent = "-";
+  intradayBestBuyPriceEl.textContent = "-";
+  intradayBestSellPriceEl.textContent = "-";
+  intradaySignalEl.textContent = "-";
+
   buySignalEl.className = "";
   sellSignalEl.className = "";
   bestBuyPriceEl.className = "";
   bestSellPriceEl.className = "";
+  intradayBestBuyPriceEl.className = "";
+  intradayBestSellPriceEl.className = "";
+  intradaySignalEl.className = "";
 }
 
 async function runDailyCheck() {
-  statusEl.textContent = "Fetching latest market data...";
+  statusEl.textContent = "Fetching daily and intraday market data...";
   startBtn.disabled = true;
 
   try {
-    const marketData = await fetchMarketData();
+    let dailyAnalysis;
+    let dailySource;
 
-    let analysis;
-    if (marketData.type === "candles") {
-      const candles = buildCandles(marketData.quote);
-      if (candles.length < 20) {
-        throw new Error("Not enough candle data for analysis");
+    try {
+      const dailyData = await fetchYahooQuoteData(DAILY_URL);
+      const dailyCandles = buildCandles(dailyData.quote);
+      if (dailyCandles.length < 20) {
+        throw new Error("Not enough daily candles for analysis");
       }
-      analysis = analyzeCandles(candles);
-    } else {
-      analysis = analyzeTradingViewSnapshot(marketData.candle, marketData.recommendAll);
+      dailyAnalysis = analyzeDailyCandles(dailyCandles);
+      dailySource = dailyData.source;
+    } catch (dailyError) {
+      const tvSnapshot = await fetchTradingViewSnapshot();
+      dailyAnalysis = analyzeTradingViewSnapshot(tvSnapshot.candle, tvSnapshot.recommendAll);
+      dailySource = `${tvSnapshot.source} (Daily fallback)`;
+      dailyAnalysis.reasons = `${dailyAnalysis.reasons}. Yahoo error: ${dailyError.message}`;
+    }
+
+    let intradayNote = "";
+    try {
+      const intradayData = await fetchYahooQuoteData(INTRADAY_URL);
+      const intradayCandles = buildCandles(intradayData.quote);
+      if (intradayCandles.length < 12) {
+        throw new Error("Not enough intraday candles");
+      }
+
+      const intradayAnalysis = analyzeIntradayCandles(intradayCandles);
+      intradayBestBuyPriceEl.textContent = formatPrice(intradayAnalysis.liveBestBuyPrice);
+      intradayBestBuyPriceEl.className = "positive";
+
+      intradayBestSellPriceEl.textContent = formatPrice(intradayAnalysis.liveBestSellPrice);
+      intradayBestSellPriceEl.className = "negative";
+
+      intradaySignalEl.textContent = `${intradayAnalysis.signal} (source: ${intradayData.source})`;
+      intradaySignalEl.className = intradayAnalysis.signal.includes("BUY")
+        ? "positive"
+        : intradayAnalysis.signal.includes("SELL")
+        ? "negative"
+        : "";
+    } catch (intradayError) {
+      intradayBestBuyPriceEl.textContent = "-";
+      intradayBestSellPriceEl.textContent = "-";
+      intradaySignalEl.textContent = "INTRADAY DATA NOT AVAILABLE";
+      intradaySignalEl.className = "negative";
+      intradayNote = ` Intraday fetch error: ${intradayError.message}.`;
     }
 
     const now = new Date();
-
     snapshotTimeEl.textContent = now.toLocaleString("en-IN");
-    currentPriceEl.textContent = formatPrice(analysis.latest.close);
-    ohlcEl.textContent = `${analysis.latest.open.toFixed(2)} / ${analysis.latest.high.toFixed(
+    currentPriceEl.textContent = formatPrice(dailyAnalysis.latest.close);
+    ohlcEl.textContent = `${dailyAnalysis.latest.open.toFixed(2)} / ${dailyAnalysis.latest.high.toFixed(
       2
-    )} / ${analysis.latest.low.toFixed(2)} / ${analysis.latest.close.toFixed(2)}`;
+    )} / ${dailyAnalysis.latest.low.toFixed(2)} / ${dailyAnalysis.latest.close.toFixed(2)}`;
 
-    buySignalEl.textContent = analysis.buy;
-    buySignalEl.className = analysis.buy === "YES" ? "positive" : "negative";
+    buySignalEl.textContent = dailyAnalysis.buy;
+    buySignalEl.className = dailyAnalysis.buy === "YES" ? "positive" : "negative";
 
-    sellSignalEl.textContent = analysis.sell;
-    sellSignalEl.className = analysis.sell === "YES" ? "positive" : "negative";
+    sellSignalEl.textContent = dailyAnalysis.sell;
+    sellSignalEl.className = dailyAnalysis.sell === "YES" ? "positive" : "negative";
 
-    bestBuyPriceEl.textContent = formatPrice(analysis.liveBestBuyPrice);
+    bestBuyPriceEl.textContent = formatPrice(dailyAnalysis.liveBestBuyPrice);
     bestBuyPriceEl.className = "positive";
 
-    bestSellPriceEl.textContent = formatPrice(analysis.liveBestSellPrice);
+    bestSellPriceEl.textContent = formatPrice(dailyAnalysis.liveBestSellPrice);
     bestSellPriceEl.className = "negative";
 
-    reasonEl.textContent = `${analysis.reasons}. Data source: ${marketData.source}.`;
+    reasonEl.textContent = `${dailyAnalysis.reasons}. Daily source: ${dailySource}.${intradayNote}`;
 
     statusEl.textContent = "Daily check completed.";
     resultEl.classList.remove("hidden");
   } catch (error) {
+    const siteChecks = await checkAlternativeSites();
     statusEl.textContent =
       "Daily check failed. Tried Yahoo, TradingView, and additional market sites. Check technical details below.";
-    reasonEl.textContent = `Technical details: ${error.message}`;
+    reasonEl.textContent = `Technical details: ${error.message} | Alternative site check: ${siteChecks}`;
     resultEl.classList.remove("hidden");
     clearSignals();
   } finally {

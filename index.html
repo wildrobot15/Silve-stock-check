@@ -10,8 +10,8 @@
     <main class="app">
       <h1>Nippon India Silver ETF Daily Stock Check</h1>
       <p class="subtitle">
-        Click start to fetch the latest market candle for <strong>SILVERBEES.NS</strong>
-        and get a quick buy/sell sentiment based on candle analysis.
+        Click start to fetch the latest market candles for <strong>SILVERBEES.NS</strong>
+        and get daily + intraday buy/sell levels based on candle analysis.
       </p>
 
       <button id="startBtn" type="button">Start Daily Check</button>
@@ -30,24 +30,36 @@
             <dd id="currentPrice">-</dd>
           </div>
           <div>
-            <dt>Last Candle (O/H/L/C)</dt>
+            <dt>Last Daily Candle (O/H/L/C)</dt>
             <dd id="ohlc">-</dd>
           </div>
           <div>
-            <dt>Is it a good time to buy?</dt>
+            <dt>Is it a good time to buy? (Daily)</dt>
             <dd id="buySignal">-</dd>
           </div>
           <div>
-            <dt>Live Best Buy Price</dt>
+            <dt>Live Best Buy Price (Daily)</dt>
             <dd id="bestBuyPrice">-</dd>
           </div>
           <div>
-            <dt>Is it the best time to sell?</dt>
+            <dt>Is it the best time to sell? (Daily)</dt>
             <dd id="sellSignal">-</dd>
           </div>
           <div>
-            <dt>Live Best Sell Price</dt>
+            <dt>Live Best Sell Price (Daily)</dt>
             <dd id="bestSellPrice">-</dd>
+          </div>
+          <div>
+            <dt>Live Intraday Best Buy Price</dt>
+            <dd id="intradayBestBuyPrice">-</dd>
+          </div>
+          <div>
+            <dt>Live Intraday Best Sell Price</dt>
+            <dd id="intradayBestSellPrice">-</dd>
+          </div>
+          <div>
+            <dt>Intraday Signal</dt>
+            <dd id="intradaySignal">-</dd>
           </div>
           <div>
             <dt>Analysis Notes</dt>
