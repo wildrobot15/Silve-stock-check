@@ -1,29 +1,86 @@
 const SYMBOL = "SILVERBEES.NS";
+const TV_SYMBOL = "NSE:SILVERBEES";
 const BASE_URL = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?interval=1d&range=3mo`;
 
 const DATA_ENDPOINTS = [
   {
     name: "Yahoo Finance",
-    url: BASE_URL,
+    request: {
+      url: BASE_URL,
+      options: {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      },
+    },
     parser: (data) => {
       const result = data?.chart?.result?.[0];
       const quote = result?.indicators?.quote?.[0];
       if (!result || !quote) {
         throw new Error("Unexpected response format from Yahoo Finance");
       }
-      return quote;
+      return {
+        type: "candles",
+        quote,
+      };
     },
   },
   {
     name: "Yahoo via AllOrigins proxy",
-    url: `https://api.allorigins.win/raw?url=${encodeURIComponent(BASE_URL)}`,
+    request: {
+      url: `https://api.allorigins.win/raw?url=${encodeURIComponent(BASE_URL)}`,
+      options: {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      },
+    },
     parser: (data) => {
       const result = data?.chart?.result?.[0];
       const quote = result?.indicators?.quote?.[0];
       if (!result || !quote) {
         throw new Error("Unexpected response format from proxy provider");
       }
-      return quote;
+      return {
+        type: "candles",
+        quote,
+      };
+    },
+  },
+  {
+    name: "TradingView India Scanner",
+    request: {
+      url: "https://scanner.tradingview.com/india/scan",
+      options: {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          symbols: {
+            tickers: [TV_SYMBOL],
+            query: { types: [] },
+          },
+          columns: ["open", "high", "low", "close", "Recommend.All"],
+        }),
+      },
+    },
+    parser: (data) => {
+      const row = data?.data?.[0];
+      const values = row?.d;
+      if (!row || !Array.isArray(values) || values.length < 5) {
+        throw new Error("Unexpected response format from TradingView");
+      }
+
+      const [open, high, low, close, recommendAll] = values;
+      if ([open, high, low, close].some((value) => typeof value !== "number")) {
+        throw new Error("TradingView returned incomplete OHLC values");
+      }
+
+      return {
+        type: "snapshot",
+        candle: { open, high, low, close },
+        recommendAll: typeof recommendAll === "number" ? recommendAll : 0,
+      };
     },
   },
 ];
@@ -136,27 +193,45 @@ function analyzeCandles(candles) {
   };
 }
 
-async function fetchQuoteData() {
+function analyzeTradingViewSnapshot(candle, recommendAll) {
+  const liveBestBuyPrice = candle.low;
+  const liveBestSellPrice = candle.high;
+
+  let buy = "NO";
+  let sell = "NO";
+  if (recommendAll > 0.2) {
+    buy = "YES";
+  } else if (recommendAll < -0.2) {
+    sell = "YES";
+  }
+
+  return {
+    latest: candle,
+    buy,
+    sell,
+    liveBestBuyPrice,
+    liveBestSellPrice,
+    reasons:
+      "Yahoo candle history unavailable. Used TradingView live snapshot and TradingView recommendation score for signal.",
+  };
+}
+
+async function fetchMarketData() {
   const errors = [];
 
   for (const endpoint of DATA_ENDPOINTS) {
     try {
-      const response = await fetch(endpoint.url, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      });
+      const response = await fetch(endpoint.request.url, endpoint.request.options);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data = await response.json();
-      const quote = endpoint.parser(data);
+      const parsed = endpoint.parser(data);
 
       return {
-        quote,
+        ...parsed,
         source: endpoint.name,
       };
     } catch (error) {
@@ -167,19 +242,35 @@ async function fetchQuoteData() {
   throw new Error(errors.join(" | "));
 }
 
+function clearSignals() {
+  buySignalEl.textContent = "-";
+  sellSignalEl.textContent = "-";
+  bestBuyPriceEl.textContent = "-";
+  bestSellPriceEl.textContent = "-";
+  buySignalEl.className = "";
+  sellSignalEl.className = "";
+  bestBuyPriceEl.className = "";
+  bestSellPriceEl.className = "";
+}
+
 async function runDailyCheck() {
   statusEl.textContent = "Fetching latest market data...";
   startBtn.disabled = true;
 
   try {
-    const { quote, source } = await fetchQuoteData();
+    const marketData = await fetchMarketData();
 
-    const candles = buildCandles(quote);
-    if (candles.length < 20) {
-      throw new Error("Not enough candle data for analysis");
+    let analysis;
+    if (marketData.type === "candles") {
+      const candles = buildCandles(marketData.quote);
+      if (candles.length < 20) {
+        throw new Error("Not enough candle data for analysis");
+      }
+      analysis = analyzeCandles(candles);
+    } else {
+      analysis = analyzeTradingViewSnapshot(marketData.candle, marketData.recommendAll);
     }
 
-    const analysis = analyzeCandles(candles);
     const now = new Date();
 
     snapshotTimeEl.textContent = now.toLocaleString("en-IN");
@@ -200,7 +291,7 @@ async function runDailyCheck() {
     bestSellPriceEl.textContent = formatPrice(analysis.liveBestSellPrice);
     bestSellPriceEl.className = "negative";
 
-    reasonEl.textContent = `${analysis.reasons}. Data source: ${source}.`;
+    reasonEl.textContent = `${analysis.reasons}. Data source: ${marketData.source}.`;
 
     statusEl.textContent = "Daily check completed.";
     resultEl.classList.remove("hidden");
@@ -209,14 +300,7 @@ async function runDailyCheck() {
       "Daily check failed. This usually happens due to market-data provider blocking browser requests (CORS/rate limit). Please retry in a moment.";
     reasonEl.textContent = `Technical details: ${error.message}`;
     resultEl.classList.remove("hidden");
-    buySignalEl.textContent = "-";
-    sellSignalEl.textContent = "-";
-    bestBuyPriceEl.textContent = "-";
-    bestSellPriceEl.textContent = "-";
-    buySignalEl.className = "";
-    sellSignalEl.className = "";
-    bestBuyPriceEl.className = "";
-    bestSellPriceEl.className = "";
+    clearSignals();
   } finally {
     startBtn.disabled = false;
   }
