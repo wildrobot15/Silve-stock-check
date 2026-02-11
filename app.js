@@ -2,6 +2,21 @@ const SYMBOL = "SILVERBEES.NS";
 const TV_SYMBOL = "NSE:SILVERBEES";
 const BASE_URL = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?interval=1d&range=3mo`;
 
+const FALLBACK_SITES = [
+  {
+    name: "TradingView",
+    url: `https://www.tradingview.com/symbols/${TV_SYMBOL.replace(":", "-")}/`,
+  },
+  { name: "Finviz", url: "https://finviz.com/" },
+  { name: "Barchart", url: "https://www.barchart.com/" },
+  { name: "Yahoo Finance", url: `https://finance.yahoo.com/quote/${SYMBOL}` },
+  { name: "StockCharts", url: "https://stockcharts.com/" },
+  { name: "Candlecharts", url: "https://www.candlecharts.com/" },
+  { name: "Investing.com", url: "https://www.investing.com/" },
+  { name: "Tickertape", url: "https://www.tickertape.in/" },
+  { name: "Research 360", url: "https://research360.in/" },
+];
+
 const DATA_ENDPOINTS = [
   {
     name: "Yahoo Finance",
@@ -18,10 +33,7 @@ const DATA_ENDPOINTS = [
       if (!result || !quote) {
         throw new Error("Unexpected response format from Yahoo Finance");
       }
-      return {
-        type: "candles",
-        quote,
-      };
+      return { type: "candles", quote };
     },
   },
   {
@@ -39,10 +51,7 @@ const DATA_ENDPOINTS = [
       if (!result || !quote) {
         throw new Error("Unexpected response format from proxy provider");
       }
-      return {
-        type: "candles",
-        quote,
-      };
+      return { type: "candles", quote };
     },
   },
   {
@@ -216,20 +225,40 @@ function analyzeTradingViewSnapshot(candle, recommendAll) {
   };
 }
 
+async function checkAlternativeSites() {
+  const checks = await Promise.all(
+    FALLBACK_SITES.map(async (site) => {
+      const probeUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(site.url)}`;
+      try {
+        const response = await fetch(probeUrl, {
+          method: "GET",
+          headers: { Accept: "text/html" },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return `${site.name}: reachable`;
+      } catch (_error) {
+        return `${site.name}: not reachable from browser (CORS/proxy/rate-limit)`;
+      }
+    })
+  );
+
+  return checks.join(" | ");
+}
+
 async function fetchMarketData() {
   const errors = [];
 
   for (const endpoint of DATA_ENDPOINTS) {
     try {
       const response = await fetch(endpoint.request.url, endpoint.request.options);
-
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data = await response.json();
       const parsed = endpoint.parser(data);
-
       return {
         ...parsed,
         source: endpoint.name,
@@ -239,7 +268,8 @@ async function fetchMarketData() {
     }
   }
 
-  throw new Error(errors.join(" | "));
+  const siteChecks = await checkAlternativeSites();
+  throw new Error(`${errors.join(" | ")} | Alternative site check: ${siteChecks}`);
 }
 
 function clearSignals() {
@@ -297,7 +327,7 @@ async function runDailyCheck() {
     resultEl.classList.remove("hidden");
   } catch (error) {
     statusEl.textContent =
-      "Daily check failed. This usually happens due to market-data provider blocking browser requests (CORS/rate limit). Please retry in a moment.";
+      "Daily check failed. Tried Yahoo, TradingView, and additional market sites. Check technical details below.";
     reasonEl.textContent = `Technical details: ${error.message}`;
     resultEl.classList.remove("hidden");
     clearSignals();
