@@ -1,5 +1,32 @@
 const SYMBOL = "SILVERBEES.NS";
-const API_URL = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?interval=1d&range=3mo`;
+const BASE_URL = `https://query1.finance.yahoo.com/v8/finance/chart/${SYMBOL}?interval=1d&range=3mo`;
+
+const DATA_ENDPOINTS = [
+  {
+    name: "Yahoo Finance",
+    url: BASE_URL,
+    parser: (data) => {
+      const result = data?.chart?.result?.[0];
+      const quote = result?.indicators?.quote?.[0];
+      if (!result || !quote) {
+        throw new Error("Unexpected response format from Yahoo Finance");
+      }
+      return quote;
+    },
+  },
+  {
+    name: "Yahoo via AllOrigins proxy",
+    url: `https://api.allorigins.win/raw?url=${encodeURIComponent(BASE_URL)}`,
+    parser: (data) => {
+      const result = data?.chart?.result?.[0];
+      const quote = result?.indicators?.quote?.[0];
+      if (!result || !quote) {
+        throw new Error("Unexpected response format from proxy provider");
+      }
+      return quote;
+    },
+  },
+];
 
 const startBtn = document.getElementById("startBtn");
 const statusEl = document.getElementById("status");
@@ -95,23 +122,43 @@ function analyzeCandles(candles) {
   return { latest, buy, sell, reasons: reasons.join(". ") };
 }
 
+async function fetchQuoteData() {
+  const errors = [];
+
+  for (const endpoint of DATA_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint.url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const quote = endpoint.parser(data);
+
+      return {
+        quote,
+        source: endpoint.name,
+      };
+    } catch (error) {
+      errors.push(`${endpoint.name}: ${error.message}`);
+    }
+  }
+
+  throw new Error(errors.join(" | "));
+}
+
 async function runDailyCheck() {
   statusEl.textContent = "Fetching latest market data...";
   startBtn.disabled = true;
 
   try {
-    const response = await fetch(API_URL);
-    if (!response.ok) {
-      throw new Error(`Unable to fetch data (HTTP ${response.status})`);
-    }
-
-    const data = await response.json();
-    const result = data?.chart?.result?.[0];
-    const quote = result?.indicators?.quote?.[0];
-
-    if (!result || !quote) {
-      throw new Error("Unexpected data format from data provider");
-    }
+    const { quote, source } = await fetchQuoteData();
 
     const candles = buildCandles(quote);
     if (candles.length < 20) {
@@ -133,13 +180,19 @@ async function runDailyCheck() {
     sellSignalEl.textContent = analysis.sell;
     sellSignalEl.className = analysis.sell === "YES" ? "positive" : "negative";
 
-    reasonEl.textContent = analysis.reasons;
+    reasonEl.textContent = `${analysis.reasons}. Data source: ${source}.`;
 
     statusEl.textContent = "Daily check completed.";
     resultEl.classList.remove("hidden");
   } catch (error) {
-    statusEl.textContent = `Error: ${error.message}`;
-    resultEl.classList.add("hidden");
+    statusEl.textContent =
+      "Daily check failed. This usually happens due to market-data provider blocking browser requests (CORS/rate limit). Please retry in a moment.";
+    reasonEl.textContent = `Technical details: ${error.message}`;
+    resultEl.classList.remove("hidden");
+    buySignalEl.textContent = "-";
+    sellSignalEl.textContent = "-";
+    buySignalEl.className = "";
+    sellSignalEl.className = "";
   } finally {
     startBtn.disabled = false;
   }
