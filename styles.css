@@ -1,0 +1,98 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(120deg, #0f172a, #1d4ed8);
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.app {
+  width: min(760px, 92vw);
+  background: rgba(255, 255, 255, 0.95);
+  color: #111827;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+}
+
+h1 {
+  margin-top: 0;
+}
+
+.subtitle {
+  margin-bottom: 20px;
+  color: #374151;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+.status {
+  margin-top: 14px;
+  font-weight: 600;
+}
+
+.card {
+  margin-top: 20px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+dl {
+  margin: 0;
+}
+
+.card div {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+dt {
+  font-weight: 700;
+}
+
+.hidden {
+  display: none;
+}
+
+.positive {
+  color: #047857;
+  font-weight: 700;
+}
+
+.negative {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .card div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

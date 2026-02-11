@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nippon India Silver ETF Daily Check</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Nippon India Silver ETF Daily Stock Check</h1>
+      <p class="subtitle">
+        Click start to fetch the latest market candles for <strong>SILVERBEES.NS</strong>
+        and get daily + intraday buy/sell levels based on candle analysis.
+      </p>
+
+      <button id="startBtn" type="button">Start Daily Check</button>
+
+      <section id="status" class="status">Ready to run daily check.</section>
+
+      <section id="result" class="card hidden" aria-live="polite">
+        <h2>Latest Snapshot</h2>
+        <dl>
+          <div>
+            <dt>Time</dt>
+            <dd id="snapshotTime">-</dd>
+          </div>
+          <div>
+            <dt>Current Market Price</dt>
+            <dd id="currentPrice">-</dd>
+          </div>
+          <div>
+            <dt>Last Daily Candle (O/H/L/C)</dt>
+            <dd id="ohlc">-</dd>
+          </div>
+          <div>
+            <dt>Is it a good time to buy? (Daily)</dt>
+            <dd id="buySignal">-</dd>
+          </div>
+          <div>
+            <dt>Live Best Buy Price (Daily)</dt>
+            <dd id="bestBuyPrice">-</dd>
+          </div>
+          <div>
+            <dt>Is it the best time to sell? (Daily)</dt>
+            <dd id="sellSignal">-</dd>
+          </div>
+          <div>
+            <dt>Live Best Sell Price (Daily)</dt>
+            <dd id="bestSellPrice">-</dd>
+          </div>
+          <div>
+            <dt>Live Intraday Best Buy Price</dt>
+            <dd id="intradayBestBuyPrice">-</dd>
+          </div>
+          <div>
+            <dt>Live Intraday Best Sell Price</dt>
+            <dd id="intradayBestSellPrice">-</dd>
+          </div>
+          <div>
+            <dt>Intraday Signal</dt>
+            <dd id="intradaySignal">-</dd>
+          </div>
+          <div>
+            <dt>Analysis Notes</dt>
+            <dd id="reason">-</dd>
+          </div>
+        </dl>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
