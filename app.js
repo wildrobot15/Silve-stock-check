@@ -37,6 +37,8 @@ const currentPriceEl = document.getElementById("currentPrice");
 const ohlcEl = document.getElementById("ohlc");
 const buySignalEl = document.getElementById("buySignal");
 const sellSignalEl = document.getElementById("sellSignal");
+const bestBuyPriceEl = document.getElementById("bestBuyPrice");
+const bestSellPriceEl = document.getElementById("bestSellPrice");
 const reasonEl = document.getElementById("reason");
 
 function formatPrice(value) {
@@ -89,6 +91,11 @@ function analyzeCandles(candles) {
     latest.open >= previous.close &&
     latest.close <= previous.open;
 
+  const supportWindow = candles.slice(-10);
+  const resistanceWindow = candles.slice(-10);
+  const liveBestBuyPrice = Math.min(...supportWindow.map((candle) => candle.low));
+  const liveBestSellPrice = Math.max(...resistanceWindow.map((candle) => candle.high));
+
   let buy = "NO";
   let sell = "NO";
   const reasons = [];
@@ -119,7 +126,14 @@ function analyzeCandles(candles) {
     sell = "NO";
   }
 
-  return { latest, buy, sell, reasons: reasons.join(". ") };
+  return {
+    latest,
+    buy,
+    sell,
+    liveBestBuyPrice,
+    liveBestSellPrice,
+    reasons: reasons.join(". "),
+  };
 }
 
 async function fetchQuoteData() {
@@ -180,6 +194,12 @@ async function runDailyCheck() {
     sellSignalEl.textContent = analysis.sell;
     sellSignalEl.className = analysis.sell === "YES" ? "positive" : "negative";
 
+    bestBuyPriceEl.textContent = formatPrice(analysis.liveBestBuyPrice);
+    bestBuyPriceEl.className = "positive";
+
+    bestSellPriceEl.textContent = formatPrice(analysis.liveBestSellPrice);
+    bestSellPriceEl.className = "negative";
+
     reasonEl.textContent = `${analysis.reasons}. Data source: ${source}.`;
 
     statusEl.textContent = "Daily check completed.";
@@ -191,8 +211,12 @@ async function runDailyCheck() {
     resultEl.classList.remove("hidden");
     buySignalEl.textContent = "-";
     sellSignalEl.textContent = "-";
+    bestBuyPriceEl.textContent = "-";
+    bestSellPriceEl.textContent = "-";
     buySignalEl.className = "";
     sellSignalEl.className = "";
+    bestBuyPriceEl.className = "";
+    bestSellPriceEl.className = "";
   } finally {
     startBtn.disabled = false;
   }
