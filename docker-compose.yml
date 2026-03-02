@@ -1,0 +1,29 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: soar
+      POSTGRES_PASSWORD: soar
+      POSTGRES_DB: soar
+    ports:
+      - "5432:5432"
+  backend:
+    build: ./backend
+    environment:
+      DB_USER: soar
+      DB_PASSWORD: soar
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: soar
+      SECRET_KEY: super-secret-change-me
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
